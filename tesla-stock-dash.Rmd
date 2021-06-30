@@ -1,0 +1,284 @@
+---
+title: "Tesla Stock Visualization"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library('plotly')
+library('tidyverse')
+library('alphavantager')
+library(DT)
+library(knitr)
+```
+
+```{r}
+av_api_key("CKD58LXA2ST9UP8L")
+
+stock_symbol <- 'TSLA'
+start_date <- as.Date('2018-01-01')
+
+ohlc <- av_get(symbol = stock_symbol, av_fun = 'TIME_SERIES_DAILY', outputsize = 'full') %>%
+  filter(timestamp >= start_date)
+psar <- av_get(symbol = stock_symbol, av_fun = 'SAR', interval='daily') %>%
+  filter(time >= start_date) %>%
+  mutate(time=as.Date(time,format="%Y-%m-%d"))
+macd <- av_get(symbol = stock_symbol, av_fun = 'MACD', interval='daily', series_type = 'close') %>%
+  filter(time >= start_date)  %>%
+  mutate(time=as.Date(time,format="%Y-%m-%d"))
+rsi <- av_get(symbol = stock_symbol, av_fun = 'RSI', interval='daily', time_period=14, series_type='close') %>%
+  filter(time >= start_date)  %>%
+  mutate(time=as.Date(time,format="%Y-%m-%d"))
+
+data <- ohlc %>%
+  merge(y = psar, by.x = 'timestamp', by.y = 'time') %>%
+  merge(y = macd, by.x = 'timestamp', by.y = 'time') %>%
+  merge(y = rsi, by.x = 'timestamp',  by.y = 'time')
+  
+```
+
+Tesla Stock Price Analysis
+=====================================
+
+Row
+-------------------------------------
+
+### Stock Price analysis
+
+```{r}
+valueBox(paste("TSLA"),
+         color = "black")
+```
+
+Column {data-width=550}
+-----------------------------------------------------------------------
+
+### Tesla Stock Price using Candlestick chart
+
+```{r}
+plot1 <- plot_ly(data) %>%
+  add_trace(type = 'candlestick', 
+            name = 'OHLC',
+            x = ~timestamp,
+            open = ~open, high = ~high, low = ~low, close = ~close,
+            increasing = list(line = list(color='rgba(52,169,102,1)',
+                                          width=1),
+                              fillcolor = 'rgba(0,0,0,0)'), # Transparent
+            decreasing = list(line = list(color='rgba(220,68,59,1)',
+                                          width=1),
+                              fillcolor = 'rgba(0,0,0,0)'), # Transparent
+            legendgroup = 'one') 
+plot1
+```
+
+Interactive Data Visualization I
+=====================================================================
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### PSAR 
+
+```{r}
+plot2 <- plot_ly(data) %>%
+  add_trace(type = 'candlestick', 
+            name = 'OHLC',
+            x = ~timestamp,
+            open = ~open, high = ~high, low = ~low, close = ~close,
+            increasing = list(line = list(color='rgba(52,169,102,1)',
+                                          width=1),
+                              fillcolor = 'rgba(0,0,0,0)'), # Transparent
+            decreasing = list(line = list(color='rgba(220,68,59,1)',
+                                          width=1),
+                              fillcolor = 'rgba(0,0,0,0)'), # Transparent
+            legendgroup = 'one') %>%
+  add_trace(type = 'scatter', 
+            mode = 'markers',
+            x = ~timestamp,
+            y = ~sar,
+            name = 'PSAR',
+            marker = list(color = 'orange', size = 4),
+            legendgroup = 'one') 
+plot2
+```
+
+
+```{r}
+plot3 <- plot2 %>%
+  add_trace(type = 'bar', 
+            x = ~timestamp,
+            y = ~macd_hist,
+            name = 'MACD Histogram',
+            marker = list(color = 'gray'),
+            yaxis = 'y2',
+            legendgroup = 'two') %>%
+  add_trace(type = 'scatter', 
+            mode = 'lines',
+            marker = NULL,
+            x = ~timestamp,
+            y = ~macd,
+            name = 'MACD',
+            line = list(color = 'red'),
+            yaxis = 'y2',
+            legendgroup = 'two') %>%
+  add_trace(type = 'scatter', 
+            mode = 'lines',
+            marker = NULL,
+            x = ~timestamp,
+            y = ~macd_signal,
+            name = 'Signal',
+            line = list(color = 'plum'),
+            yaxis = 'y2',
+            legendgroup = 'two') %>%
+  add_trace(type = 'scatter', 
+            mode = 'lines',
+            marker = NULL,
+            x = ~timestamp,
+            y = ~rsi,
+            name = 'RSI',
+            line = list(color = 'plum'),
+            yaxis = 'y3',
+            legendgroup = 'three') %>%
+  add_trace(type = 'scatter', 
+            mode = 'lines',
+            marker = NULL,
+            x = c(~min(timestamp), ~max(timestamp)),
+            y = c(70,70),
+            name = 'RSI',
+            line = list(color = 'red',
+                        width = 0.5,
+                        dash = 'dot'),
+            yaxis = 'y3',
+            legendgroup = 'three') %>%
+  add_trace(type = 'scatter', 
+            mode = 'lines',
+            marker = NULL,
+            x = c(~min(timestamp), ~max(timestamp)),
+            y = c(30,30),
+            name = 'RSI',
+            line = list(color = 'red',
+                        width = 0.5,
+                        dash = 'dot'),
+            yaxis = 'y3',
+            legendgroup = 'three') %>%
+  layout(yaxis = list(domain = c(0.62, 1),
+                      fixedrange = FALSE),
+         yaxis2 = list(domain = c(0.32, 0.58),
+                       fixedrange = FALSE),
+         yaxis3 = list(domain = c(0., 0.28),
+                       fixedrange = FALSE))
+  
+```
+
+
+
+```{r}
+plot4 <- plot3 %>% layout(paper_bgcolor='rgba(37,37,37,1)',
+                          plot_bgcolor='rgba(37,37,37,1)',
+                          margin = list(l=60, r=20, t=30, b=5))
+```
+
+Interactive Visualization II
+===============================
+
+```{r}
+plot5 <- plot4 %>%
+  layout(xaxis = list(titlefont = list(color='rgb(200,115,115)'),
+                      tickfont = list(color='rgb(200,200,200)'),
+                      linewidth=1,
+                      linecolor = 'white'),
+         yaxis = list(domain = c(0.62, 1),
+                      title = 'PSAR & OHLC',
+                      titlefont = list(color='rgb(200,115,115)'),
+                      tickfont = list(color='rgb(200,200,200)'),
+                      linewidth=1,
+                      linecolor = 'white',
+                      mirror = "all"),
+         yaxis2 = list(domain = c(0.32, 0.58),
+                      title = 'MACD',
+                      titlefont = list(color='rgb(200,115,115)'),
+                      tickfont = list(color='rgb(200,200,200)'),
+                      linewidth=1,
+                      linecolor = 'white',
+                      mirror = "all"),
+         yaxis3 = list(domain = c(0., 0.28),
+                      title = 'RSI',
+                      titlefont = list(color='rgb(200,115,115)'),
+                      tickfont = list(color='rgb(200,200,200)'),
+                      linewidth=1,
+                      linecolor = 'white',
+                      mirror = "all"))
+  
+```
+
+Column {data-width=550}
+-----------------------------------------------------------------------
+
+### PSAR MACD & RSI
+
+```{r}
+plot6 <- plot5 %>%
+  layout(xaxis = list( rangeselector = list( buttons = list( list(count = 3,
+                                                                  label = "3 mo",
+                                                                  step = "month",
+                                                                  stepmode = "backward"),
+                                                             list(
+                                                               count = 6,
+                                                               label = "6 mo",
+                                                               step = "month",
+                                                               stepmode = "backward"),
+                                                             list(
+                                                               count = 1,
+                                                               label = "1 yr",
+                                                               step = "year",
+                                                               stepmode = "backward"),
+                                                             list(
+                                                               count = 1,
+                                                               label = "YTD",
+                                                               step = "year",
+                                                               stepmode = "todate"),
+                                                             list(step = "all"))),
+                       rangeslider=list(visible=FALSE)))
+
+plot6
+```
+
+Data Table
+================================
+
+```{r}
+datatable(data,
+          caption = "Tesla Stock Price Data",
+          rownames = T,
+          filter = "top",
+          options = list(pageLength = 25))
+```
+
+Dashboard Summary 
+=================================
+
+Row {data-width=1000}
+-----------------------------------------------------------------------
+
+### Tesla Logo
+```{r  out.width = "50%", out.height = "50%"}
+include_graphics("D:/CCFD/Tesla_logo.png") 
+```
+
+Column
+-----------------------------
+
+* Insights from the visualizations:
+* The PSAR line is above the candlestick which indicates the stock's downward trend but the PSAR line itself is in a downward trend which indicates it may fall below the candlestick which represents the stock's upward trend. 
+
+* The last signal from the MACD & signal line is bearish signal, but currently we can see the MACD & signal line are nearing an intersection with MACD line in an upward trend.
+
+* The last signal from RSI on 13th of May was an oversold signal which indicates the stock is in an upward trend.
+
+* Conclusion:
+* With the help of PSAR, MACD & RSI we can understand that the Tesla stock price is currently in a downward trend, but the indicators shows the stock prices will start hiking in the near future and the market will be in an upward trend. So the stakeholders can be advised to buy or hold the stocks and not to sell the stock because of the current downward trend.
+
+
